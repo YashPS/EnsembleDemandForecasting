@@ -1,0 +1,590 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: lstmpipeline-
+  annotations: {pipelines.kubeflow.org/kfp_sdk_version: 1.7.1, pipelines.kubeflow.org/pipeline_compilation_time: '2022-06-23T19:13:50.171134',
+                pipelines.kubeflow.org/pipeline_spec: '{"description": "lstm test", "inputs":
+      [{"default": "http://rok.rok.svc.cluster.local/swift/v1/kubeflow-user/notebooks/ensemble-0_ensemble-workspace-4x5l7?version=54fefd22-430c-4794-8e9c-f244e90e9946",
+      "name": "rok_ensemble_workspace_4x5l7_url", "optional": true, "type": "str"}],
+      "name": "lstmpipeline"}'}
+  labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.7.1}
+spec:
+  entrypoint: lstmpipeline
+  templates:
+    - name: create-volume-1
+      resource:
+        action: create
+        setOwnerReference: true
+        manifest: |
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            annotations:
+              rok/origin: '{{inputs.parameters.rok_ensemble_workspace_4x5l7_url}}'
+            name: '{{workflow.name}}-ensemble-workspace-4x5l7'
+          spec:
+            accessModes:
+            - ReadWriteMany
+            resources:
+              requests:
+                storage: 5Gi
+            storageClassName: rok
+      inputs:
+        parameters:
+          - {name: rok_ensemble_workspace_4x5l7_url}
+      outputs:
+        parameters:
+          - name: create-volume-1-manifest
+            valueFrom: {jsonPath: '{}'}
+          - name: create-volume-1-name
+            valueFrom: {jsonPath: '{.metadata.name}'}
+          - name: create-volume-1-size
+            valueFrom: {jsonPath: '{.status.capacity.storage}'}
+      metadata:
+        annotations: {pipelines.kubeflow.org/max_cache_staleness: P0D}
+        labels:
+          pipelines.kubeflow.org/cache_enabled: "false"
+          pipelines.kubeflow.org/enable_caching: "true"
+    - name: eval
+      container:
+        args: [--in, Y_valid, '{{inputs.parameters.train-Y_valid}}', --in, X_valid_series,
+               '{{inputs.parameters.predict-X_valid_series}}', --in, lstm_pred, '{{inputs.parameters.predict-lstm_pred}}',
+               --in, SMAPE, '{{inputs.parameters.setparams-SMAPE}}', --in, model_lstm, '{{inputs.parameters.predict-model_lstm}}']
+        command: [python3, -u, -m, kale, /home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb,
+                  --step, eval]
+        env:
+          - {name: PYTHONUNBUFFERED, value: '1'}
+        image: gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198
+        securityContext: {runAsUser: 0}
+        volumeMounts:
+          - {mountPath: /home/jovyan, name: create-volume-1}
+        workingDir: /home/jovyan/ensemble/forecasting_ensemble/notebooks
+      inputs:
+        parameters:
+          - {name: create-volume-1-name}
+          - {name: predict-X_valid_series}
+          - {name: predict-lstm_pred}
+          - {name: predict-model_lstm}
+          - {name: setparams-SMAPE}
+          - {name: train-Y_valid}
+      outputs:
+        artifacts:
+          - {name: mlpipeline-ui-metadata, path: /tmp/mlpipeline-ui-metadata.json}
+          - {name: eval, path: /tmp/eval.html}
+      metadata:
+        annotations: {kubeflow-kale.org/dependent-templates: '["create-volume-1", "predict"]',
+                      pipelines.kubeflow.org/max_cache_staleness: P0D, kubeflow-kale.org/volume-name-parameters: '["create-volume-1-name"]',
+                      pipelines.kubeflow.org/component_spec: '{"description": "", "implementation":
+          {"container": {"args": ["--in", "Y_valid", {"inputValue": "Y_valid"}, "--in",
+          "X_valid_series", {"inputValue": "X_valid_series"}, "--in", "lstm_pred",
+          {"inputValue": "lstm_pred"}, "--in", "SMAPE", {"inputValue": "SMAPE"}, "--in",
+          "model_lstm", {"inputValue": "model_lstm"}], "command": ["python3", "-u",
+          "-m", "kale", "/home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb",
+          "--step", "eval"], "env": {"PYTHONUNBUFFERED": "1"}, "image": "gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198"}},
+          "inputs": [{"name": "Y_valid", "type": "str"}, {"name": "X_valid_series",
+          "type": "str"}, {"name": "lstm_pred", "type": "str"}, {"name": "SMAPE",
+          "type": "str"}, {"name": "model_lstm", "type": "str"}], "name": "eval",
+          "outputs": []}', pipelines.kubeflow.org/component_ref: '{"name": "lstmpipeline"}',
+                      pipelines.kubeflow.org/arguments.parameters: '{"SMAPE": "{{inputs.parameters.setparams-SMAPE}}",
+          "X_valid_series": "{{inputs.parameters.predict-X_valid_series}}", "Y_valid":
+          "{{inputs.parameters.train-Y_valid}}", "lstm_pred": "{{inputs.parameters.predict-lstm_pred}}",
+          "model_lstm": "{{inputs.parameters.predict-model_lstm}}"}'}
+        labels:
+          access-ml-pipeline: "true"
+          access-rok: "true"
+          pipelines.kubeflow.org/metadata_written: "true"
+          pipelines.kubeflow.org/cache_enabled: "false"
+          pipelines.kubeflow.org/enable_caching: "true"
+      volumes:
+        - name: create-volume-1
+          persistentVolumeClaim: {claimName: '{{inputs.parameters.create-volume-1-name}}'}
+    - name: lstmpipeline
+      inputs:
+        parameters:
+          - {name: rok_ensemble_workspace_4x5l7_url}
+      dag:
+        tasks:
+          - name: create-volume-1
+            template: create-volume-1
+            arguments:
+              parameters:
+                - {name: rok_ensemble_workspace_4x5l7_url, value: '{{inputs.parameters.rok_ensemble_workspace_4x5l7_url}}'}
+          - name: eval
+            template: eval
+            dependencies: [create-volume-1, predict, setparams, train]
+            arguments:
+              parameters:
+                - {name: create-volume-1-name, value: '{{tasks.create-volume-1.outputs.parameters.create-volume-1-name}}'}
+                - {name: predict-X_valid_series, value: '{{tasks.predict.outputs.parameters.predict-X_valid_series}}'}
+                - {name: predict-lstm_pred, value: '{{tasks.predict.outputs.parameters.predict-lstm_pred}}'}
+                - {name: predict-model_lstm, value: '{{tasks.predict.outputs.parameters.predict-model_lstm}}'}
+                - {name: setparams-SMAPE, value: '{{tasks.setparams.outputs.parameters.setparams-SMAPE}}'}
+                - {name: train-Y_valid, value: '{{tasks.train.outputs.parameters.train-Y_valid}}'}
+          - name: predict
+            template: predict
+            dependencies: [create-volume-1, train]
+            arguments:
+              parameters:
+                - {name: create-volume-1-name, value: '{{tasks.create-volume-1.outputs.parameters.create-volume-1-name}}'}
+                - {name: train-X_valid_series, value: '{{tasks.train.outputs.parameters.train-X_valid_series}}'}
+                - {name: train-model_lstm, value: '{{tasks.train.outputs.parameters.train-model_lstm}}'}
+          - name: preparedata
+            template: preparedata
+            dependencies: [create-volume-1, readdata, setparams]
+            arguments:
+              parameters:
+                - {name: create-volume-1-name, value: '{{tasks.create-volume-1.outputs.parameters.create-volume-1-name}}'}
+                - {name: readdata-train, value: '{{tasks.readdata.outputs.parameters.readdata-train}}'}
+                - {name: setparams-GROUPED_COLS, value: '{{tasks.setparams.outputs.parameters.setparams-GROUPED_COLS}}'}
+                - {name: setparams-INDEX_COL, value: '{{tasks.setparams.outputs.parameters.setparams-INDEX_COL}}'}
+                - {name: setparams-LABEL_COL, value: '{{tasks.setparams.outputs.parameters.setparams-LABEL_COL}}'}
+                - {name: setparams-LSTM_PARAMS, value: '{{tasks.setparams.outputs.parameters.setparams-LSTM_PARAMS}}'}
+                - {name: setparams-OBJECTS_DIR, value: '{{tasks.setparams.outputs.parameters.setparams-OBJECTS_DIR}}'}
+                - {name: setparams-SCALER_FILE, value: '{{tasks.setparams.outputs.parameters.setparams-SCALER_FILE}}'}
+                - {name: setparams-data_scaler, value: '{{tasks.setparams.outputs.parameters.setparams-data_scaler}}'}
+                - {name: setparams-lstm_data_preprocessing, value: '{{tasks.setparams.outputs.parameters.setparams-lstm_data_preprocessing}}'}
+                - {name: setparams-reshape_features, value: '{{tasks.setparams.outputs.parameters.setparams-reshape_features}}'}
+                - {name: setparams-series_to_supervised, value: '{{tasks.setparams.outputs.parameters.setparams-series_to_supervised}}'}
+                - {name: setparams-split_train_valid, value: '{{tasks.setparams.outputs.parameters.setparams-split_train_valid}}'}
+          - name: readdata
+            template: readdata
+            dependencies: [create-volume-1, setparams]
+            arguments:
+              parameters:
+                - {name: create-volume-1-name, value: '{{tasks.create-volume-1.outputs.parameters.create-volume-1-name}}'}
+                - {name: setparams-TEST_PATH, value: '{{tasks.setparams.outputs.parameters.setparams-TEST_PATH}}'}
+                - {name: setparams-TRAIN_PATH, value: '{{tasks.setparams.outputs.parameters.setparams-TRAIN_PATH}}'}
+                - {name: setparams-read_data, value: '{{tasks.setparams.outputs.parameters.setparams-read_data}}'}
+          - name: setparams
+            template: setparams
+            dependencies: [create-volume-1]
+            arguments:
+              parameters:
+                - {name: create-volume-1-name, value: '{{tasks.create-volume-1.outputs.parameters.create-volume-1-name}}'}
+          - name: train
+            template: train
+            dependencies: [create-volume-1, preparedata, setparams]
+            arguments:
+              parameters:
+                - {name: create-volume-1-name, value: '{{tasks.create-volume-1.outputs.parameters.create-volume-1-name}}'}
+                - {name: preparedata-X_train_series, value: '{{tasks.preparedata.outputs.parameters.preparedata-X_train_series}}'}
+                - {name: preparedata-X_valid_series, value: '{{tasks.preparedata.outputs.parameters.preparedata-X_valid_series}}'}
+                - {name: preparedata-Y_train, value: '{{tasks.preparedata.outputs.parameters.preparedata-Y_train}}'}
+                - {name: preparedata-Y_valid, value: '{{tasks.preparedata.outputs.parameters.preparedata-Y_valid}}'}
+                - {name: setparams-LSTM_PARAMS, value: '{{tasks.setparams.outputs.parameters.setparams-LSTM_PARAMS}}'}
+                - {name: setparams-MODEL_DIR, value: '{{tasks.setparams.outputs.parameters.setparams-MODEL_DIR}}'}
+                - {name: setparams-lstm_model, value: '{{tasks.setparams.outputs.parameters.setparams-lstm_model}}'}
+    - name: predict
+      container:
+        args: [--in, X_valid_series, '{{inputs.parameters.train-X_valid_series}}', --in,
+               model_lstm, '{{inputs.parameters.train-model_lstm}}', --out, X_valid_series,
+               /tmp/outputs/X_valid_series/data, --out, model_lstm, /tmp/outputs/model_lstm/data,
+               --out, lstm_pred, /tmp/outputs/lstm_pred/data]
+        command: [python3, -u, -m, kale, /home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb,
+                  --step, predict]
+        env:
+          - {name: PYTHONUNBUFFERED, value: '1'}
+        image: gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198
+        securityContext: {runAsUser: 0}
+        volumeMounts:
+          - {mountPath: /home/jovyan, name: create-volume-1}
+        workingDir: /home/jovyan/ensemble/forecasting_ensemble/notebooks
+      inputs:
+        parameters:
+          - {name: create-volume-1-name}
+          - {name: train-X_valid_series}
+          - {name: train-model_lstm}
+      outputs:
+        parameters:
+          - name: predict-X_valid_series
+            valueFrom: {path: /tmp/outputs/X_valid_series/data}
+          - name: predict-lstm_pred
+            valueFrom: {path: /tmp/outputs/lstm_pred/data}
+          - name: predict-model_lstm
+            valueFrom: {path: /tmp/outputs/model_lstm/data}
+        artifacts:
+          - {name: mlpipeline-ui-metadata, path: /tmp/mlpipeline-ui-metadata.json}
+          - {name: predict, path: /tmp/predict.html}
+          - {name: predict-X_valid_series, path: /tmp/outputs/X_valid_series/data}
+          - {name: predict-lstm_pred, path: /tmp/outputs/lstm_pred/data}
+          - {name: predict-model_lstm, path: /tmp/outputs/model_lstm/data}
+      metadata:
+        annotations: {kubeflow-kale.org/dependent-templates: '["create-volume-1", "train"]',
+                      pipelines.kubeflow.org/max_cache_staleness: P0D, kubeflow-kale.org/volume-name-parameters: '["create-volume-1-name"]',
+                      pipelines.kubeflow.org/component_spec: '{"description": "", "implementation":
+          {"container": {"args": ["--in", "X_valid_series", {"inputValue": "X_valid_series"},
+          "--in", "model_lstm", {"inputValue": "model_lstm"}, "--out", "X_valid_series",
+          {"outputPath": "X_valid_series"}, "--out", "model_lstm", {"outputPath":
+          "model_lstm"}, "--out", "lstm_pred", {"outputPath": "lstm_pred"}], "command":
+          ["python3", "-u", "-m", "kale", "/home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb",
+          "--step", "predict"], "env": {"PYTHONUNBUFFERED": "1"}, "image": "gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198"}},
+          "inputs": [{"name": "X_valid_series", "type": "str"}, {"name": "model_lstm",
+          "type": "str"}], "name": "predict", "outputs": [{"name": "X_valid_series",
+          "type": "str"}, {"name": "model_lstm", "type": "str"}, {"name": "lstm_pred",
+          "type": "str"}]}', pipelines.kubeflow.org/component_ref: '{"name": "lstmpipeline"}',
+                      pipelines.kubeflow.org/arguments.parameters: '{"X_valid_series": "{{inputs.parameters.train-X_valid_series}}",
+          "model_lstm": "{{inputs.parameters.train-model_lstm}}"}'}
+        labels:
+          access-ml-pipeline: "true"
+          access-rok: "true"
+          pipelines.kubeflow.org/metadata_written: "true"
+          pipelines.kubeflow.org/cache_enabled: "false"
+          pipelines.kubeflow.org/enable_caching: "true"
+      volumes:
+        - name: create-volume-1
+          persistentVolumeClaim: {claimName: '{{inputs.parameters.create-volume-1-name}}'}
+    - name: preparedata
+      container:
+        args: [--in, split_train_valid, '{{inputs.parameters.setparams-split_train_valid}}',
+               --in, LABEL_COL, '{{inputs.parameters.setparams-LABEL_COL}}', --in, series_to_supervised,
+               '{{inputs.parameters.setparams-series_to_supervised}}', --in, data_scaler,
+               '{{inputs.parameters.setparams-data_scaler}}', --in, OBJECTS_DIR, '{{inputs.parameters.setparams-OBJECTS_DIR}}',
+               --in, GROUPED_COLS, '{{inputs.parameters.setparams-GROUPED_COLS}}', --in,
+               train, '{{inputs.parameters.readdata-train}}', --in, INDEX_COL, '{{inputs.parameters.setparams-INDEX_COL}}',
+               --in, LSTM_PARAMS, '{{inputs.parameters.setparams-LSTM_PARAMS}}', --in, SCALER_FILE,
+               '{{inputs.parameters.setparams-SCALER_FILE}}', --in, reshape_features, '{{inputs.parameters.setparams-reshape_features}}',
+               --in, lstm_data_preprocessing, '{{inputs.parameters.setparams-lstm_data_preprocessing}}',
+               --out, Y_valid, /tmp/outputs/Y_valid/data, --out, X_train_series, /tmp/outputs/X_train_series/data,
+               --out, X_valid_series, /tmp/outputs/X_valid_series/data, --out, Y_train, /tmp/outputs/Y_train/data,
+               --out, LSTM_PARAMS, /tmp/outputs/LSTM_PARAMS/data]
+        command: [python3, -u, -m, kale, /home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb,
+                  --step, preparedata]
+        env:
+          - {name: PYTHONUNBUFFERED, value: '1'}
+        image: gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198
+        securityContext: {runAsUser: 0}
+        volumeMounts:
+          - {mountPath: /home/jovyan, name: create-volume-1}
+        workingDir: /home/jovyan/ensemble/forecasting_ensemble/notebooks
+      inputs:
+        parameters:
+          - {name: create-volume-1-name}
+          - {name: readdata-train}
+          - {name: setparams-GROUPED_COLS}
+          - {name: setparams-INDEX_COL}
+          - {name: setparams-LABEL_COL}
+          - {name: setparams-LSTM_PARAMS}
+          - {name: setparams-OBJECTS_DIR}
+          - {name: setparams-SCALER_FILE}
+          - {name: setparams-data_scaler}
+          - {name: setparams-lstm_data_preprocessing}
+          - {name: setparams-reshape_features}
+          - {name: setparams-series_to_supervised}
+          - {name: setparams-split_train_valid}
+      outputs:
+        parameters:
+          - name: preparedata-LSTM_PARAMS
+            valueFrom: {path: /tmp/outputs/LSTM_PARAMS/data}
+          - name: preparedata-X_train_series
+            valueFrom: {path: /tmp/outputs/X_train_series/data}
+          - name: preparedata-X_valid_series
+            valueFrom: {path: /tmp/outputs/X_valid_series/data}
+          - name: preparedata-Y_train
+            valueFrom: {path: /tmp/outputs/Y_train/data}
+          - name: preparedata-Y_valid
+            valueFrom: {path: /tmp/outputs/Y_valid/data}
+        artifacts:
+          - {name: mlpipeline-ui-metadata, path: /tmp/mlpipeline-ui-metadata.json}
+          - {name: preparedata, path: /tmp/preparedata.html}
+          - {name: preparedata-LSTM_PARAMS, path: /tmp/outputs/LSTM_PARAMS/data}
+          - {name: preparedata-X_train_series, path: /tmp/outputs/X_train_series/data}
+          - {name: preparedata-X_valid_series, path: /tmp/outputs/X_valid_series/data}
+          - {name: preparedata-Y_train, path: /tmp/outputs/Y_train/data}
+          - {name: preparedata-Y_valid, path: /tmp/outputs/Y_valid/data}
+      metadata:
+        annotations: {kubeflow-kale.org/dependent-templates: '["create-volume-1", "readdata"]',
+                      pipelines.kubeflow.org/max_cache_staleness: P0D, kubeflow-kale.org/volume-name-parameters: '["create-volume-1-name"]',
+                      pipelines.kubeflow.org/component_spec: '{"description": "", "implementation":
+          {"container": {"args": ["--in", "split_train_valid", {"inputValue": "split_train_valid"},
+          "--in", "LABEL_COL", {"inputValue": "LABEL_COL"}, "--in", "series_to_supervised",
+          {"inputValue": "series_to_supervised"}, "--in", "data_scaler", {"inputValue":
+          "data_scaler"}, "--in", "OBJECTS_DIR", {"inputValue": "OBJECTS_DIR"}, "--in",
+          "GROUPED_COLS", {"inputValue": "GROUPED_COLS"}, "--in", "train", {"inputValue":
+          "train"}, "--in", "INDEX_COL", {"inputValue": "INDEX_COL"}, "--in", "LSTM_PARAMS",
+          {"inputValue": "LSTM_PARAMS"}, "--in", "SCALER_FILE", {"inputValue": "SCALER_FILE"},
+          "--in", "reshape_features", {"inputValue": "reshape_features"}, "--in",
+          "lstm_data_preprocessing", {"inputValue": "lstm_data_preprocessing"}, "--out",
+          "Y_valid", {"outputPath": "Y_valid"}, "--out", "X_train_series", {"outputPath":
+          "X_train_series"}, "--out", "X_valid_series", {"outputPath": "X_valid_series"},
+          "--out", "Y_train", {"outputPath": "Y_train"}, "--out", "LSTM_PARAMS", {"outputPath":
+          "LSTM_PARAMS"}], "command": ["python3", "-u", "-m", "kale", "/home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb",
+          "--step", "preparedata"], "env": {"PYTHONUNBUFFERED": "1"}, "image": "gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198"}},
+          "inputs": [{"name": "split_train_valid", "type": "str"}, {"name": "LABEL_COL",
+          "type": "str"}, {"name": "series_to_supervised", "type": "str"}, {"name":
+          "data_scaler", "type": "str"}, {"name": "OBJECTS_DIR", "type": "str"}, {"name":
+          "GROUPED_COLS", "type": "str"}, {"name": "train", "type": "str"}, {"name":
+          "INDEX_COL", "type": "str"}, {"name": "LSTM_PARAMS", "type": "str"}, {"name":
+          "SCALER_FILE", "type": "str"}, {"name": "reshape_features", "type": "str"},
+          {"name": "lstm_data_preprocessing", "type": "str"}], "name": "preparedata",
+          "outputs": [{"name": "Y_valid", "type": "str"}, {"name": "X_train_series",
+          "type": "str"}, {"name": "X_valid_series", "type": "str"}, {"name": "Y_train",
+          "type": "str"}, {"name": "LSTM_PARAMS", "type": "str"}]}', pipelines.kubeflow.org/component_ref: '{"name":
+          "lstmpipeline"}', pipelines.kubeflow.org/arguments.parameters: '{"GROUPED_COLS":
+          "{{inputs.parameters.setparams-GROUPED_COLS}}", "INDEX_COL": "{{inputs.parameters.setparams-INDEX_COL}}",
+          "LABEL_COL": "{{inputs.parameters.setparams-LABEL_COL}}", "LSTM_PARAMS":
+          "{{inputs.parameters.setparams-LSTM_PARAMS}}", "OBJECTS_DIR": "{{inputs.parameters.setparams-OBJECTS_DIR}}",
+          "SCALER_FILE": "{{inputs.parameters.setparams-SCALER_FILE}}", "data_scaler":
+          "{{inputs.parameters.setparams-data_scaler}}", "lstm_data_preprocessing":
+          "{{inputs.parameters.setparams-lstm_data_preprocessing}}", "reshape_features":
+          "{{inputs.parameters.setparams-reshape_features}}", "series_to_supervised":
+          "{{inputs.parameters.setparams-series_to_supervised}}", "split_train_valid":
+          "{{inputs.parameters.setparams-split_train_valid}}", "train": "{{inputs.parameters.readdata-train}}"}'}
+        labels:
+          access-ml-pipeline: "true"
+          access-rok: "true"
+          pipelines.kubeflow.org/metadata_written: "true"
+          pipelines.kubeflow.org/cache_enabled: "false"
+          pipelines.kubeflow.org/enable_caching: "true"
+      volumes:
+        - name: create-volume-1
+          persistentVolumeClaim: {claimName: '{{inputs.parameters.create-volume-1-name}}'}
+    - name: readdata
+      container:
+        args: [--in, read_data, '{{inputs.parameters.setparams-read_data}}', --in, TEST_PATH,
+               '{{inputs.parameters.setparams-TEST_PATH}}', --in, TRAIN_PATH, '{{inputs.parameters.setparams-TRAIN_PATH}}',
+               --out, train, /tmp/outputs/train/data]
+        command: [python3, -u, -m, kale, /home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb,
+                  --step, readdata]
+        env:
+          - {name: PYTHONUNBUFFERED, value: '1'}
+        image: gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198
+        securityContext: {runAsUser: 0}
+        volumeMounts:
+          - {mountPath: /home/jovyan, name: create-volume-1}
+        workingDir: /home/jovyan/ensemble/forecasting_ensemble/notebooks
+      inputs:
+        parameters:
+          - {name: create-volume-1-name}
+          - {name: setparams-TEST_PATH}
+          - {name: setparams-TRAIN_PATH}
+          - {name: setparams-read_data}
+      outputs:
+        parameters:
+          - name: readdata-train
+            valueFrom: {path: /tmp/outputs/train/data}
+        artifacts:
+          - {name: mlpipeline-ui-metadata, path: /tmp/mlpipeline-ui-metadata.json}
+          - {name: readdata, path: /tmp/readdata.html}
+          - {name: readdata-train, path: /tmp/outputs/train/data}
+      metadata:
+        annotations: {kubeflow-kale.org/dependent-templates: '["create-volume-1", "setparams"]',
+                      pipelines.kubeflow.org/max_cache_staleness: P0D, kubeflow-kale.org/volume-name-parameters: '["create-volume-1-name"]',
+                      pipelines.kubeflow.org/component_spec: '{"description": "", "implementation":
+          {"container": {"args": ["--in", "read_data", {"inputValue": "read_data"},
+          "--in", "TEST_PATH", {"inputValue": "TEST_PATH"}, "--in", "TRAIN_PATH",
+          {"inputValue": "TRAIN_PATH"}, "--out", "train", {"outputPath": "train"}],
+          "command": ["python3", "-u", "-m", "kale", "/home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb",
+          "--step", "readdata"], "env": {"PYTHONUNBUFFERED": "1"}, "image": "gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198"}},
+          "inputs": [{"name": "read_data", "type": "str"}, {"name": "TEST_PATH", "type":
+          "str"}, {"name": "TRAIN_PATH", "type": "str"}], "name": "readdata", "outputs":
+          [{"name": "train", "type": "str"}]}', pipelines.kubeflow.org/component_ref: '{"name":
+          "lstmpipeline"}', pipelines.kubeflow.org/arguments.parameters: '{"TEST_PATH":
+          "{{inputs.parameters.setparams-TEST_PATH}}", "TRAIN_PATH": "{{inputs.parameters.setparams-TRAIN_PATH}}",
+          "read_data": "{{inputs.parameters.setparams-read_data}}"}'}
+        labels:
+          access-ml-pipeline: "true"
+          access-rok: "true"
+          pipelines.kubeflow.org/metadata_written: "true"
+          pipelines.kubeflow.org/cache_enabled: "false"
+          pipelines.kubeflow.org/enable_caching: "true"
+      volumes:
+        - name: create-volume-1
+          persistentVolumeClaim: {claimName: '{{inputs.parameters.create-volume-1-name}}'}
+    - name: setparams
+      container:
+        args: [--out, read_data, /tmp/outputs/read_data/data, --out, TEST_PATH, /tmp/outputs/TEST_PATH/data,
+               --out, TRAIN_PATH, /tmp/outputs/TRAIN_PATH/data, --out, split_train_valid,
+               /tmp/outputs/split_train_valid/data, --out, LABEL_COL, /tmp/outputs/LABEL_COL/data,
+               --out, series_to_supervised, /tmp/outputs/series_to_supervised/data, --out,
+               data_scaler, /tmp/outputs/data_scaler/data, --out, OBJECTS_DIR, /tmp/outputs/OBJECTS_DIR/data,
+               --out, GROUPED_COLS, /tmp/outputs/GROUPED_COLS/data, --out, INDEX_COL, /tmp/outputs/INDEX_COL/data,
+               --out, LSTM_PARAMS, /tmp/outputs/LSTM_PARAMS/data, --out, SCALER_FILE, /tmp/outputs/SCALER_FILE/data,
+               --out, reshape_features, /tmp/outputs/reshape_features/data, --out, lstm_data_preprocessing,
+               /tmp/outputs/lstm_data_preprocessing/data, --out, MODEL_DIR, /tmp/outputs/MODEL_DIR/data,
+               --out, lstm_model, /tmp/outputs/lstm_model/data, --out, SMAPE, /tmp/outputs/SMAPE/data]
+        command: [python3, -u, -m, kale, /home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb,
+                  --step, setparams]
+        env:
+          - {name: PYTHONUNBUFFERED, value: '1'}
+        image: gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198
+        securityContext: {runAsUser: 0}
+        volumeMounts:
+          - {mountPath: /home/jovyan, name: create-volume-1}
+        workingDir: /home/jovyan/ensemble/forecasting_ensemble/notebooks
+      inputs:
+        parameters:
+          - {name: create-volume-1-name}
+      outputs:
+        parameters:
+          - name: setparams-GROUPED_COLS
+            valueFrom: {path: /tmp/outputs/GROUPED_COLS/data}
+          - name: setparams-INDEX_COL
+            valueFrom: {path: /tmp/outputs/INDEX_COL/data}
+          - name: setparams-LABEL_COL
+            valueFrom: {path: /tmp/outputs/LABEL_COL/data}
+          - name: setparams-LSTM_PARAMS
+            valueFrom: {path: /tmp/outputs/LSTM_PARAMS/data}
+          - name: setparams-MODEL_DIR
+            valueFrom: {path: /tmp/outputs/MODEL_DIR/data}
+          - name: setparams-OBJECTS_DIR
+            valueFrom: {path: /tmp/outputs/OBJECTS_DIR/data}
+          - name: setparams-SCALER_FILE
+            valueFrom: {path: /tmp/outputs/SCALER_FILE/data}
+          - name: setparams-SMAPE
+            valueFrom: {path: /tmp/outputs/SMAPE/data}
+          - name: setparams-TEST_PATH
+            valueFrom: {path: /tmp/outputs/TEST_PATH/data}
+          - name: setparams-TRAIN_PATH
+            valueFrom: {path: /tmp/outputs/TRAIN_PATH/data}
+          - name: setparams-data_scaler
+            valueFrom: {path: /tmp/outputs/data_scaler/data}
+          - name: setparams-lstm_data_preprocessing
+            valueFrom: {path: /tmp/outputs/lstm_data_preprocessing/data}
+          - name: setparams-lstm_model
+            valueFrom: {path: /tmp/outputs/lstm_model/data}
+          - name: setparams-read_data
+            valueFrom: {path: /tmp/outputs/read_data/data}
+          - name: setparams-reshape_features
+            valueFrom: {path: /tmp/outputs/reshape_features/data}
+          - name: setparams-series_to_supervised
+            valueFrom: {path: /tmp/outputs/series_to_supervised/data}
+          - name: setparams-split_train_valid
+            valueFrom: {path: /tmp/outputs/split_train_valid/data}
+        artifacts:
+          - {name: mlpipeline-ui-metadata, path: /tmp/mlpipeline-ui-metadata.json}
+          - {name: setparams, path: /tmp/setparams.html}
+          - {name: setparams-GROUPED_COLS, path: /tmp/outputs/GROUPED_COLS/data}
+          - {name: setparams-INDEX_COL, path: /tmp/outputs/INDEX_COL/data}
+          - {name: setparams-LABEL_COL, path: /tmp/outputs/LABEL_COL/data}
+          - {name: setparams-LSTM_PARAMS, path: /tmp/outputs/LSTM_PARAMS/data}
+          - {name: setparams-MODEL_DIR, path: /tmp/outputs/MODEL_DIR/data}
+          - {name: setparams-OBJECTS_DIR, path: /tmp/outputs/OBJECTS_DIR/data}
+          - {name: setparams-SCALER_FILE, path: /tmp/outputs/SCALER_FILE/data}
+          - {name: setparams-SMAPE, path: /tmp/outputs/SMAPE/data}
+          - {name: setparams-TEST_PATH, path: /tmp/outputs/TEST_PATH/data}
+          - {name: setparams-TRAIN_PATH, path: /tmp/outputs/TRAIN_PATH/data}
+          - {name: setparams-data_scaler, path: /tmp/outputs/data_scaler/data}
+          - {name: setparams-lstm_data_preprocessing, path: /tmp/outputs/lstm_data_preprocessing/data}
+          - {name: setparams-lstm_model, path: /tmp/outputs/lstm_model/data}
+          - {name: setparams-read_data, path: /tmp/outputs/read_data/data}
+          - {name: setparams-reshape_features, path: /tmp/outputs/reshape_features/data}
+          - {name: setparams-series_to_supervised, path: /tmp/outputs/series_to_supervised/data}
+          - {name: setparams-split_train_valid, path: /tmp/outputs/split_train_valid/data}
+      metadata:
+        annotations: {kubeflow-kale.org/dependent-templates: '["create-volume-1"]',
+                      pipelines.kubeflow.org/max_cache_staleness: P0D, kubeflow-kale.org/volume-name-parameters: '["create-volume-1-name"]',
+                      pipelines.kubeflow.org/component_spec: '{"description": "", "implementation":
+          {"container": {"args": ["--out", "read_data", {"outputPath": "read_data"},
+          "--out", "TEST_PATH", {"outputPath": "TEST_PATH"}, "--out", "TRAIN_PATH",
+          {"outputPath": "TRAIN_PATH"}, "--out", "split_train_valid", {"outputPath":
+          "split_train_valid"}, "--out", "LABEL_COL", {"outputPath": "LABEL_COL"},
+          "--out", "series_to_supervised", {"outputPath": "series_to_supervised"},
+          "--out", "data_scaler", {"outputPath": "data_scaler"}, "--out", "OBJECTS_DIR",
+          {"outputPath": "OBJECTS_DIR"}, "--out", "GROUPED_COLS", {"outputPath": "GROUPED_COLS"},
+          "--out", "INDEX_COL", {"outputPath": "INDEX_COL"}, "--out", "LSTM_PARAMS",
+          {"outputPath": "LSTM_PARAMS"}, "--out", "SCALER_FILE", {"outputPath": "SCALER_FILE"},
+          "--out", "reshape_features", {"outputPath": "reshape_features"}, "--out",
+          "lstm_data_preprocessing", {"outputPath": "lstm_data_preprocessing"}, "--out",
+          "MODEL_DIR", {"outputPath": "MODEL_DIR"}, "--out", "lstm_model", {"outputPath":
+          "lstm_model"}, "--out", "SMAPE", {"outputPath": "SMAPE"}], "command": ["python3",
+          "-u", "-m", "kale", "/home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb",
+          "--step", "setparams"], "env": {"PYTHONUNBUFFERED": "1"}, "image": "gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198"}},
+          "inputs": [], "name": "setparams", "outputs": [{"name": "read_data", "type":
+          "str"}, {"name": "TEST_PATH", "type": "str"}, {"name": "TRAIN_PATH", "type":
+          "str"}, {"name": "split_train_valid", "type": "str"}, {"name": "LABEL_COL",
+          "type": "str"}, {"name": "series_to_supervised", "type": "str"}, {"name":
+          "data_scaler", "type": "str"}, {"name": "OBJECTS_DIR", "type": "str"}, {"name":
+          "GROUPED_COLS", "type": "str"}, {"name": "INDEX_COL", "type": "str"}, {"name":
+          "LSTM_PARAMS", "type": "str"}, {"name": "SCALER_FILE", "type": "str"}, {"name":
+          "reshape_features", "type": "str"}, {"name": "lstm_data_preprocessing",
+          "type": "str"}, {"name": "MODEL_DIR", "type": "str"}, {"name": "lstm_model",
+          "type": "str"}, {"name": "SMAPE", "type": "str"}]}', pipelines.kubeflow.org/component_ref: '{"name":
+          "lstmpipeline"}'}
+        labels:
+          access-ml-pipeline: "true"
+          access-rok: "true"
+          pipelines.kubeflow.org/metadata_written: "true"
+          pipelines.kubeflow.org/cache_enabled: "false"
+          pipelines.kubeflow.org/enable_caching: "true"
+      volumes:
+        - name: create-volume-1
+          persistentVolumeClaim: {claimName: '{{inputs.parameters.create-volume-1-name}}'}
+    - name: train
+      container:
+        args: [--in, lstm_model, '{{inputs.parameters.setparams-lstm_model}}', --in,
+               X_train_series, '{{inputs.parameters.preparedata-X_train_series}}', --in,
+               Y_valid, '{{inputs.parameters.preparedata-Y_valid}}', --in, X_valid_series,
+               '{{inputs.parameters.preparedata-X_valid_series}}', --in, Y_train, '{{inputs.parameters.preparedata-Y_train}}',
+               --in, LSTM_PARAMS, '{{inputs.parameters.setparams-LSTM_PARAMS}}', --in, MODEL_DIR,
+               '{{inputs.parameters.setparams-MODEL_DIR}}', --out, X_valid_series, /tmp/outputs/X_valid_series/data,
+               --out, model_lstm, /tmp/outputs/model_lstm/data, --out, Y_valid, /tmp/outputs/Y_valid/data]
+        command: [python3, -u, -m, kale, /home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb,
+                  --step, train]
+        env:
+          - {name: PYTHONUNBUFFERED, value: '1'}
+        image: gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198
+        securityContext: {runAsUser: 0}
+        volumeMounts:
+          - {mountPath: /home/jovyan, name: create-volume-1}
+        workingDir: /home/jovyan/ensemble/forecasting_ensemble/notebooks
+      inputs:
+        parameters:
+          - {name: create-volume-1-name}
+          - {name: preparedata-X_train_series}
+          - {name: preparedata-X_valid_series}
+          - {name: preparedata-Y_train}
+          - {name: preparedata-Y_valid}
+          - {name: setparams-LSTM_PARAMS}
+          - {name: setparams-MODEL_DIR}
+          - {name: setparams-lstm_model}
+      outputs:
+        parameters:
+          - name: train-X_valid_series
+            valueFrom: {path: /tmp/outputs/X_valid_series/data}
+          - name: train-Y_valid
+            valueFrom: {path: /tmp/outputs/Y_valid/data}
+          - name: train-model_lstm
+            valueFrom: {path: /tmp/outputs/model_lstm/data}
+        artifacts:
+          - {name: mlpipeline-ui-metadata, path: /tmp/mlpipeline-ui-metadata.json}
+          - {name: train, path: /tmp/train.html}
+          - {name: train-X_valid_series, path: /tmp/outputs/X_valid_series/data}
+          - {name: train-Y_valid, path: /tmp/outputs/Y_valid/data}
+          - {name: train-model_lstm, path: /tmp/outputs/model_lstm/data}
+      metadata:
+        annotations: {kubeflow-kale.org/dependent-templates: '["create-volume-1", "preparedata"]',
+                      pipelines.kubeflow.org/max_cache_staleness: P0D, kubeflow-kale.org/volume-name-parameters: '["create-volume-1-name"]',
+                      pipelines.kubeflow.org/component_spec: '{"description": "", "implementation":
+          {"container": {"args": ["--in", "lstm_model", {"inputValue": "lstm_model"},
+          "--in", "X_train_series", {"inputValue": "X_train_series"}, "--in", "Y_valid",
+          {"inputValue": "Y_valid"}, "--in", "X_valid_series", {"inputValue": "X_valid_series"},
+          "--in", "Y_train", {"inputValue": "Y_train"}, "--in", "LSTM_PARAMS", {"inputValue":
+          "LSTM_PARAMS"}, "--in", "MODEL_DIR", {"inputValue": "MODEL_DIR"}, "--out",
+          "X_valid_series", {"outputPath": "X_valid_series"}, "--out", "model_lstm",
+          {"outputPath": "model_lstm"}, "--out", "Y_valid", {"outputPath": "Y_valid"}],
+          "command": ["python3", "-u", "-m", "kale", "/home/jovyan/ensemble/forecasting_ensemble/notebooks/modularised.ipynb",
+          "--step", "train"], "env": {"PYTHONUNBUFFERED": "1"}, "image": "gcr.io/arrikto/jupyter-kale-py36@sha256:dd3f92ca66b46d247e4b9b6a9d84ffbb368646263c2e3909473c3b851f3fe198"}},
+          "inputs": [{"name": "lstm_model", "type": "str"}, {"name": "X_train_series",
+          "type": "str"}, {"name": "Y_valid", "type": "str"}, {"name": "X_valid_series",
+          "type": "str"}, {"name": "Y_train", "type": "str"}, {"name": "LSTM_PARAMS",
+          "type": "str"}, {"name": "MODEL_DIR", "type": "str"}], "name": "train",
+          "outputs": [{"name": "X_valid_series", "type": "str"}, {"name": "model_lstm",
+          "type": "str"}, {"name": "Y_valid", "type": "str"}]}', pipelines.kubeflow.org/component_ref: '{"name":
+          "lstmpipeline"}', pipelines.kubeflow.org/arguments.parameters: '{"LSTM_PARAMS":
+          "{{inputs.parameters.setparams-LSTM_PARAMS}}", "MODEL_DIR": "{{inputs.parameters.setparams-MODEL_DIR}}",
+          "X_train_series": "{{inputs.parameters.preparedata-X_train_series}}", "X_valid_series":
+          "{{inputs.parameters.preparedata-X_valid_series}}", "Y_train": "{{inputs.parameters.preparedata-Y_train}}",
+          "Y_valid": "{{inputs.parameters.preparedata-Y_valid}}", "lstm_model": "{{inputs.parameters.setparams-lstm_model}}"}'}
+        labels:
+          access-ml-pipeline: "true"
+          access-rok: "true"
+          pipelines.kubeflow.org/metadata_written: "true"
+          pipelines.kubeflow.org/cache_enabled: "false"
+          pipelines.kubeflow.org/enable_caching: "true"
+      volumes:
+        - name: create-volume-1
+          persistentVolumeClaim: {claimName: '{{inputs.parameters.create-volume-1-name}}'}
+  arguments:
+    parameters:
+      - {name: rok_ensemble_workspace_4x5l7_url, value: 'http://rok.rok.svc.cluster.local/swift/v1/kubeflow-user/notebooks/ensemble-0_ensemble-workspace-4x5l7?version=54fefd22-430c-4794-8e9c-f244e90e9946'}
+  serviceAccountName: pipeline-runner

@@ -1,18 +1,24 @@
-
 # Data config
-GROUPED_COLS: ['item','store','date']
+DATA_COLS: ['date','store','item','sales']
+CATEGORIES: ['store','item']
+NUMERIC_COLS: ['store','item','sales']
+GROUPED_COLS: ['store','item','date']
 LABEL_COL: sales
 INDEX_COL: date
+
 
 # Model Parameters
 # LSTM
 LSTM_PARAMS:
-  LSTM_WINDOW_LENGTH: 29
+  # Look back does not include current day, ie for 90 days of historic data lookback = 89
+  LSTM_LOOKBACK: 89
   LSTM_PREDICTION_LAG: 90
-  LSTM_NODES: 30
+  LSTM_NODES: 64
+  LSTM_DROPOUT: 0.5
   LSTM_EPOCHS: 10
-  LSTM_BATCH: 256
-  LSTM_LR: 0.003
+  LSTM_BATCH_SIZE: 90
+  LSTM_LR: 0.01
+  LSTM_LABEL_COUNT: 1
 
 # XGBoost
 XGB_PARAMS:

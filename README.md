@@ -55,3 +55,17 @@ Project Organization
 --------
 
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
+
+HOW TO GET DEPENDENCIES INTO REQUIREMENTS.TXT
+-------
+1- Install pipreqs & nbconvert.
+
+2- Run the following after changing name of notebook-
+
+jupyter nbconvert --output-dir="./reqs" --to script notebooks/{NAME OF NOTEBOOK}.ipynb
+
+3- cd  /reqs
+
+4- Run - pipreqs
+
+5- Requirements.txt will be generated inside reqs folder

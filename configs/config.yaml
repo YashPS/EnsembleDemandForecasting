@@ -13,6 +13,7 @@ LSTM_PARAMS:
   # Look back does not include current day, ie for 90 days of historic data lookback = 89
   LSTM_LOOKBACK: 89
   LSTM_PREDICTION_LAG: 90
+  LSTM_EVAL_LEN: 360
   LSTM_NODES: 64
   LSTM_DROPOUT: 0.5
   LSTM_EPOCHS: 10

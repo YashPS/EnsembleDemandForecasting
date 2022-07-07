@@ -1,0 +1,10 @@
+joblib==1.1.0
+keras==2.9.0
+matplotlib==3.5.2
+numpy==1.23.0
+pandas==1.4.3
+prophet==1.1
+PyYAML==6.0
+scikit_learn==1.1.1
+statsmodels==0.13.2
+xgboost==1.6.1
